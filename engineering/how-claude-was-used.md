@@ -1,0 +1,31 @@
+# How Claude Was Used
+
+This pipeline was built inside Claude Code, driving a live n8n instance through an MCP server. Same setup as the sister voice-agent/chatbot repository, applied to a research-heavier build. The split is worth naming up front: the other repository's build was mostly node-configuration work against a well-defined spec. This one carried a genuinely large research and writing load: an internal cold-email playbook that ran past 1,900 lines, a pipeline reference past 750, a sourced market-research document past 680, alongside the workflow code, and the failure modes that showed up were different in kind, not just in scale. What's published in this repository is a condensed distillation of that source material, not a line-for-line copy of it.
+
+## What this build actually required, beyond node configuration
+
+**Sourcing discipline as a first-class task, not a side effect.** The market-research document behind the ICP and targeting decisions grades every figure A through D by source reliability, and the explicit rule, never treat a [C] figure as load-bearing, had to be enforced against Claude's own drafting instinct as much as against any external source. A model asked to write persuasively will reach for the strongest-sounding number available. The discipline required was choosing the weaker, better-sourced one instead, every time.
+
+**Measuring before building, not estimating and hoping.** The dual-source scraper design ([`../pipeline/dual-source-design.md`](../pipeline/dual-source-design.md)) was written entirely from live data pulled from the target API before a single pipeline node existed: coverage rates, competitor-match yields at different distance/gap thresholds, entity-type distribution. That measurement pass caught the region-field bug (filtering by region silently drops 16.5% of the UK) before it ever reached production, purely by checking distribution rather than trusting a field name.
+
+**Catching a fabricated-proof problem in its own generated output.** The most consequential finding in this build's history sat inside the pipeline's own code: invented client-result figures, presented as real, in a code path with a live execution date. The model that helped write the original placeholder was also the one that later caught it, when asked to review adversarially rather than agreeably. That's the most direct evidence in this build for why the sister repository's rule holds here too: "review this" gets agreement, "find what's wrong with this specifically" gets findings.
+
+## What worked
+
+**Treating a validator "false positive" as a claim, not a verdict.** The `$helpers.httpRequest` bug (see [`build-log.md`](build-log.md)) survived multiple passes specifically because a validator warning had been filed away as a known false positive on the strength of "another workflow uses this pattern." The fix wasn't a smarter validator. It was a standing rule to distrust that specific class of dismissal and re-check duration against what the external call should physically take.
+
+**Re-verifying a fix instead of trusting the first pass.** The Template A live-iteration work read six real test-sends as an actual recipient would, then stress-tested the result against all 22 real eligible leads rather than one hand-typed example, and that second pass caught a text-duplication bug the first pass's single example could never have surfaced. The habit of re-checking a claimed fix against the full real population, not just the case that prompted the fix, caught problems the fix itself introduced.
+
+**Asking "is this actually true" as a standalone verification step.** When directly challenged on whether AI-summarised review complaints could be trusted as real rather than invented, the honest answer required going back to source: a live re-scrape of real businesses' current reviews, compared by eye. Confirming a claim on request, cheaply and quickly, mattered more than getting it right the first time.
+
+## What did not work, or took multiple attempts
+
+**An estimate stated with more confidence than it deserved.** A keyword-list widening was projected to recover roughly 23 additional qualifying leads. Measured against real data after shipping, the actual number was closer to 5 to 10. The estimate hadn't accounted for how narrowly the routing logic was deliberately scoped. Not a large error in absolute terms, but a reminder that an estimate stated in a build log reads as more authoritative than it is, and the fix is checking it against reality before it propagates into a plan.
+
+**The write-key problem took three attempts to actually close.** A format mismatch was fixed first. That exposed a uniqueness problem underneath it. Fixing that required a structural change (a dedicated key column) that the first two fixes hadn't gone far enough to need. Each intermediate fix was verified and looked complete at the time. The lesson wasn't "verify less carefully." It was that a data-integrity bug can have more than one root cause stacked on top of each other, and clearing the first one doesn't mean the second one isn't still there.
+
+**A design decision reversed itself, twice, on the same question.** Whether to keep phone-number matching or switch to a different write pattern was decided one way, then reversed with stated reasoning, then reversed again once the original reasoning turned out to rest on an assumption (idempotency) that measurement disproved. Kept in the log with each reversal dated and the reasoning attached, rather than only showing the final answer, because which assumption was wrong, and for how long, turned out to be worth keeping on record.
+
+## Honest summary
+
+The research and copy-writing side of this build needed a different kind of discipline than the node-configuration side: sourcing rigor enforced against the model's own tendency to reach for the strongest-sounding claim, and a standing habit of catching fabricated content in generated output before it reaches a real inbox, not just catching wrong function calls before they reach a real system. Both halves, the workflow code and the 5,300-odd lines of research and playbook behind it, needed the same underlying method. Measure before building, verify after writing, and treat a clean-looking result as a claim to check rather than a fact to trust.
